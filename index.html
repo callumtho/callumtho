@@ -1,486 +1,387 @@
-<!DOCTYPE HTML>
-<!--
-	Read Only by HTML5 UP
-	html5up.net | @ajlkn
-	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
--->
 <html>
-	<head>
-		<title>callumtho.co.uk</title>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-		<link rel="stylesheet" href="assets/css/main.css" />
-	</head>
-	<body class="is-preload">
+<head>
+	<meta charset="UTF-8">
+	<title>Web MIDI API</title>
+	<style>
+	*:before, *:after {
+		-webkit-box-sizing: border-box;
+		-moz-box-sizing: border-box;
+		box-sizing: border-box;
+	}
+	h4 {
+		margin: 0 0 5px 0;
+	}
+	p {
+		margin: 0 0 10px 0;
+	}
+	#content, #device_info {
+		max-width: 800px;
+		margin: 0 auto;
+		padding: 10px 0;
+		font-family: sans-serif;
+		font-size: 12px;
+		line-height: 12px;
+		letter-spacing: 1.5px;
+	}
+	#content, #key_data {
+		margin-top: 0px;
+		text-align: center;
+	}
+	#inputs, #outputs {
+		display: inline-block;
+		width: 49%;
+		margin-top: 10px;
+		vertical-align: top;
+	}
+	#outputs {
+		text-align: right;
+	}
+	.info {
+		padding: 20px;
+		border-radius: 3px;
+		box-shadow: inset 0 0 10px #ccc;
+		background-color: rgba(233,233,233,0.25);
+	}
+	.small {
+		border-bottom: 1px solid #ccc;
+		margin-left: 10px;
+	}
+	p:not(.small){
+		text-transform: uppercase;
+		font-weight: 800;
+	}
+	.button {
+		display: inline-block;
+		width: 100px;
+		height: 100px;
+		margin: 10px;
+		background-color: #00adef;
+		border-radius: 10px;
+		opacity: 1;
+		cursor: pointer;
+		border: 2px solid white;
+		transition: all 0.2s;
+	}
+	.button.active {
+		background-color: #9a6aad;
+		opacity: 0.25;
+		box-shadow: inset 0px 0px 30px orange;
+		border: 2px solid rgba(100,100,100,0.3);
+		animation: shake .2s ease-in-out;
+	}
+	@keyframes shake {
+		0% {
+			transform: translateX(0);
+			transform: translateY(0);
+			transform: scale(1,1);
+		}
+		20% {
+			transform: translateX(-10px);
+			transform: translateY(-100px);
+			transform: scale(0.5,0.75);
+		}
+		40% {
+			transform: translateX(10px);
+			transform: translateY(0px);
+			transform: scale(1.5,2);
+		}
+		60% {
+			transform: translateX(-10px);
+			transform: translateY(-50px);
+			transform: scale(0.5,0.75);
+		}
+		80% {
+			transform: translateX(10px);
+			transform: translateY(50px);
+			transform: scale(1.3,2);
+		}
+		100% {
+			transform: translateX(0);
+			transform: translateY(0);
+		}
+	}
+	</style>
+</head>
+<body>
+	<div id="content">
+		<div class="button" data-key="q" data-sound="audio/dinky-kick.mp3"></div>
+		<div class="button" data-key="w" data-sound="audio/dinky-snare.mp3"></div>
+		<div class="button" data-key="e" data-sound="audio/dinky-hat-2.mp3"></div>
+		<div class="button" data-key="r" data-sound="audio/dinky-cym.mp3"></div>
+		<div class="button" data-key="t" data-sound="audio/dinky-cym-noise.mp3"></div>
+	</div>
+	<div id="device_info">
+		<div id="key_data"></div>
+		<div id="inputs"></div>
+		<div id="outputs"></div>
+	</div>
 
-		<!-- Header -->
-			<section id="header">
-				<header>
-					<span class="image avatar"><img src="images/avatar.jpg" alt="" /></span>
-					<h1 id="logo"><a href="#">Callum Thompson</a></h1>
-					<p>BMus Music (Hons) from University of Birmingham
-					</p>
-				</header>
-				<nav id="nav">
-					<ul>
-						<li><a href="#one" class="active">About</a></li>
-						<li><a href="#two">Things I Can Do</a></li>
-						<li><a href="#three">A Few Accomplishments</a></li>
-						<li><a href="#four">Contact</a></li>
-					</ul>
-				</nav>
-				<footer>
-					<ul class="icons">
-						<li><a href="https://twitter.com/calgeth/" class="icon fa-twitter"><span class="label">Twitter</span></a></li>
-						<li><a href="https://facebook.com/callumtho/" class="icon fa-facebook"><span class="label">Facebook</span></a></li>
-						<li><a href="https://instagram.com/callumtho/" class="icon fa-instagram"><span class="label">Instagram</span></a></li>
-						<li><a href="https://github.com/callumtho/" class="icon fa-github"><span class="label">Github</span></a></li>
-						<li><a href="mailto:callumtho@icloud.com" class="icon fa-envelope"><span class="label">Email</span></a></li>
-					</ul>
-				</footer>
-			</section>
+	<script>
+	//http://stackoverflow.com/questions/23687635/how-to-stop-audio-in-an-iframe-using-web-audio-api-after-hiding-its-container-di
+	(function(){
+		var log = console.log.bind(console), keyData = document.getElementById('key_data'), 
+				deviceInfoInputs = document.getElementById('inputs'), deviceInfoOutputs = document.getElementById('outputs'), midi;
+		var AudioContext = AudioContext || webkitAudioContext; // for ios/safari
+		var context = new AudioContext();
+		var activeNotes = [];
+		var btnBox = document.getElementById('content'), btn = document.getElementsByClassName('button');
+		var data, cmd, channel, type, note, velocity;
 
-		<!-- Wrapper -->
-			<div id="wrapper">
+		// request MIDI access
+		if(navigator.requestMIDIAccess){
+			navigator.requestMIDIAccess({sysex: false}).then(onMIDISuccess, onMIDIFailure);
+		}
+		else {
+			alert("No MIDI support in your browser.");
+		}
 
-				<!-- Main -->
-					<div id="main">
+		// add event listeners
+		document.addEventListener('keydown', keyController);
+		document.addEventListener('keyup', keyController);
+		for(var i = 0; i < btn.length; i++){
+			btn[i].addEventListener('mousedown', clickPlayOn);
+			btn[i].addEventListener('mouseup', clickPlayOff);	
+		}
+		// prepare audio files
+		for(var i = 0; i < btn.length; i++){
+			addAudioProperties(btn[i]);
+		}
 
-						<!-- One -->
-							<section id="one">
-								<div class="image main" data-position="center">
-									<img src="images/banner.jpg" alt="" />
-								</div>
-								<div class="container">
-									<header class="major">
-										<h2>Callum George Thompson</h2>
-										<p>Good evening, all.</p>
-									</header>
-									<p>sample text sample text sample text sample text sample text sample text sample text sample text sample text sample text sample text sample text sample text sample text sample text sample text </p>
-								</div>
-							</section>
+		var sampleMap = {
+			key60: 1,
+			key61: 2,
+			key62: 3,
+			key63: 4,
+			key64: 5
+		};
+		// user interaction 
+		function clickPlayOn(e){
+			e.target.classList.add('active');
+			e.target.play();
+		}
+		
+		function clickPlayOff(e){
+			e.target.classList.remove('active');
+		}
 
-						<!-- Two -->
-							<section id="two">
-								<div class="container">
-									<h3>Things I Can Do</h3>
-									<p>Just a smattering of the many things I'm great at. Take your pick, drop me a line for more info.</p>
-									<ul class="feature-icons">
-										<li class="fa-code">Left- and right-handed piano</li>
-										<li class="fa-cubes">Play Minecraft</li>
-										<li class="fa-book">Read books and stuff I guess</li>
-										<li class="fa-coffee">Drink Baileys mmm</li>
-										<li class="fa-bolt">Lightning bolt iPhone charging</li>
-										<li class="fa-users">Socialise with friends (many)</li>
-									</ul>
-								</div>
-							</section>
+		function keyController(e){
+			if(e.type == "keydown"){
+				switch(e.keyCode){
+					case 81:
+						btn[0].classList.add('active');
+						btn[0].play();
+						break;
+					case 87:
+						btn[1].classList.add('active');
+						btn[1].play();
+						break;
+					case 69:
+						btn[2].classList.add('active');
+						btn[2].play();
+						break;
+					case 82:
+						btn[3].classList.add('active');
+						btn[3].play();
+						break;
+					case 84:
+						btn[4].classList.add('active');
+						btn[4].play();
+						break;					
+					default:
+						//console.log(e);
+				}
+			}
+			else if(e.type == "keyup"){
+				switch(e.keyCode){
+					case 81:
+						btn[0].classList.remove('active');
+						break;
+					case 87:
+						btn[1].classList.remove('active');
+						break;
+					case 69:
+						btn[2].classList.remove('active');
+						break;
+					case 82:
+						btn[3].classList.remove('active');
+						break;
+					case 84:
+						btn[4].classList.remove('active');
+						break;
+					default:
+						//console.log(e.keyCode);
+				}
+			}
+		}
 
-						<!-- Three -->
-							<section id="three">
-								<div class="container">
-									<h3>A Few Accomplishments</h3>
-									<p>sample text sample text sample text sample text sample text sample text sample text sample text sample text sample text sample text sample text </p>
-									<div class="features">
-										<article>
-											<a href="#" class="image"><img src="images/pic01.jpg" alt="" /></a>
-											<div class="inner">
-												<h4>Possibly broke spacetime</h4>
-												<p>Integer eu ante ornare amet commetus vestibulum blandit integer in curae ac faucibus integer adipiscing ornare amet.</p>
-											</div>
-										</article>
-										<article>
-											<a href="#" class="image"><img src="images/pic02.jpg" alt="" /></a>
-											<div class="inner">
-												<h4>Terraformed a small moon</h4>
-												<p>Integer eu ante ornare amet commetus vestibulum blandit integer in curae ac faucibus integer adipiscing ornare amet.</p>
-											</div>
-										</article>
-										<article>
-											<a href="#" class="image"><img src="images/pic03.jpg" alt="" /></a>
-											<div class="inner">
-												<h4>Snapped dark matter in the wild</h4>
-												<p>Integer eu ante ornare amet commetus vestibulum blandit integer in curae ac faucibus integer adipiscing ornare amet.</p>
-											</div>
-										</article>
-									</div>
-								</div>
-							</section>
+		// midi functions
+		function onMIDISuccess(midiAccess){
+			midi = midiAccess;
+			var inputs = midi.inputs.values();
+			// loop through all inputs
+			for(var input = inputs.next(); input && !input.done; input = inputs.next()){
+				// listen for midi messages
+				input.value.onmidimessage = onMIDIMessage;
 
-						<!-- Four -->
-							<section id="four">
-								<div class="container">
-									<h3>Contact Me</h3>
-									<p>Drop me a line about anything. I read all my fan mail.</p>
-									<form method="post" action="https://formspree.io/callumtho@icloud.com">
-										<div class="row gtr-uniform">
-											<div class="col-6 col-12-xsmall"><input type="text" name="name" id="name" placeholder="Name" /></div>
-											<div class="col-6 col-12-xsmall"><input type="email" name="email" id="email" placeholder="Email" /></div>
-											<div class="col-12"><input type="text" name="subject" id="subject" placeholder="Subject" /></div>
-											<div class="col-12"><textarea name="message" id="message" placeholder="Message" rows="6"></textarea></div>
-											<div class="col-12">
-												<ul class="actions">
-													<li><input type="submit" class="primary" value="Send Message" /></li>
-													<li><input type="reset" value="Reset Form" /></li>
-												</ul>
-											</div>
-										</div>
-									</form>
-								</div>
-							</section>
+				listInputs(input);
+			}
+			// listen for connect/disconnect message
+			midi.onstatechange = onStateChange;
 
-						<!-- Five -->
-						<!--
-							<section id="five">
-								<div class="container">
-									<h3>Elements</h3>
+			showMIDIPorts(midi);
+		}
 
-									<section>
-										<h4>Text</h4>
-										<p>This is <b>bold</b> and this is <strong>strong</strong>. This is <i>italic</i> and this is <em>emphasized</em>.
-										This is <sup>superscript</sup> text and this is <sub>subscript</sub> text.
-										This is <u>underlined</u> and this is code: <code>for (;;) { ... }</code>. Finally, <a href="#">this is a link</a>.</p>
-										<hr />
-										<header>
-											<h4>Heading with a Subtitle</h4>
-											<p>Lorem ipsum dolor sit amet nullam id egestas urna aliquam</p>
-										</header>
-										<p>Nunc lacinia ante nunc ac lobortis. Interdum adipiscing gravida odio porttitor sem non mi integer non faucibus ornare mi ut ante amet placerat aliquet. Volutpat eu sed ante lacinia sapien lorem accumsan varius montes viverra nibh in adipiscing blandit tempus accumsan.</p>
-										<header>
-											<h5>Heading with a Subtitle</h5>
-											<p>Lorem ipsum dolor sit amet nullam id egestas urna aliquam</p>
-										</header>
-										<p>Nunc lacinia ante nunc ac lobortis. Interdum adipiscing gravida odio porttitor sem non mi integer non faucibus ornare mi ut ante amet placerat aliquet. Volutpat eu sed ante lacinia sapien lorem accumsan varius montes viverra nibh in adipiscing blandit tempus accumsan.</p>
-										<hr />
-										<h2>Heading Level 2</h2>
-										<h3>Heading Level 3</h3>
-										<h4>Heading Level 4</h4>
-										<h5>Heading Level 5</h5>
-										<h6>Heading Level 6</h6>
-										<hr />
-										<h5>Blockquote</h5>
-										<blockquote>Fringilla nisl. Donec accumsan interdum nisi, quis tincidunt felis sagittis eget tempus euismod. Vestibulum ante ipsum primis in faucibus vestibulum. Blandit adipiscing eu felis iaculis volutpat ac adipiscing accumsan faucibus. Vestibulum ante ipsum primis in faucibus lorem ipsum dolor sit amet nullam adipiscing eu felis.</blockquote>
-										<h5>Preformatted</h5>
-										<pre><code>i = 0;
+		function onMIDIMessage(event){
+			data = event.data,
+			cmd = data[0] >> 4,
+			channel = data[0] & 0xf,
+			type = data[0] & 0xf0, // channel agnostic message type. Thanks, Phil Burk.
+			note = data[1],
+			velocity = data[2];
+			// with pressure and tilt off
+			// note off: 128, cmd: 8 
+			// note on: 144, cmd: 9
+			// pressure / tilt on
+			// pressure: 176, cmd 11: 
+			// bend: 224, cmd: 14
+			log('MIDI data', data);
+			switch(type){
+				case 144: // noteOn message 
+					noteOn(note, velocity);
+					break;
+				case 128: // noteOff message 
+					noteOff(note, velocity);
+					break;
+			}
+			
+			//log('data', data, 'cmd', cmd, 'channel', channel);
+			logger(keyData, 'key data', data);
+		}
 
-while (!deck.isInOrder()) {
-    print 'Iteration ' + i;
-    deck.shuffle();
-    i++;
-}
+		function onStateChange(event){
+			showMIDIPorts(midi);
+			var port = event.port, state = port.state, name = port.name, type = port.type;
+			if(type == "input")
+				log("name", name, "port", port, "state", state);
 
-print 'It took ' + i + ' iterations to sort the deck.';</code></pre>
-									</section>
+		}
 
-									<section>
-										<h4>Lists</h4>
-										<div class="row">
-											<div class="col-6 col-12-xsmall">
-												<h5>Unordered</h5>
-												<ul>
-													<li>Dolor pulvinar etiam magna etiam.</li>
-													<li>Sagittis adipiscing lorem eleifend.</li>
-													<li>Felis enim feugiat dolore viverra.</li>
-												</ul>
-												<h5>Alternate</h5>
-												<ul class="alt">
-													<li>Dolor pulvinar etiam magna etiam.</li>
-													<li>Sagittis adipiscing lorem eleifend.</li>
-													<li>Felis enim feugiat dolore viverra.</li>
-												</ul>
-											</div>
-											<div class="col-6 col-12-xsmall">
-												<h5>Ordered</h5>
-												<ol>
-													<li>Dolor pulvinar etiam magna etiam.</li>
-													<li>Etiam vel felis at lorem sed viverra.</li>
-													<li>Felis enim feugiat dolore viverra.</li>
-													<li>Dolor pulvinar etiam magna etiam.</li>
-													<li>Etiam vel felis at lorem sed viverra.</li>
-													<li>Felis enim feugiat dolore viverra.</li>
-												</ol>
-												<h5>Icons</h5>
-												<ul class="icons">
-													<li><a href="#" class="icon fa-twitter"><span class="label">Twitter</span></a></li>
-													<li><a href="#" class="icon fa-facebook"><span class="label">Facebook</span></a></li>
-													<li><a href="#" class="icon fa-instagram"><span class="label">Instagram</span></a></li>
-													<li><a href="#" class="icon fa-github"><span class="label">Github</span></a></li>
-													<li><a href="#" class="icon fa-dribbble"><span class="label">Dribbble</span></a></li>
-													<li><a href="#" class="icon fa-tumblr"><span class="label">Tumblr</span></a></li>
-												</ul>
-											</div>
-										</div>
-										<h5>Actions</h5>
-										<ul class="actions">
-											<li><a href="#" class="button primary">Default</a></li>
-											<li><a href="#" class="button">Default</a></li>
-											<li><a href="#" class="button alt">Default</a></li>
-										</ul>
-										<ul class="actions small">
-											<li><a href="#" class="button primary small">Small</a></li>
-											<li><a href="#" class="button small">Small</a></li>
-											<li><a href="#" class="button alt small">Small</a></li>
-										</ul>
-										<div class="row">
-											<div class="col-3 col-6-medium col-12-xsmall">
-												<ul class="actions stacked">
-													<li><a href="#" class="button primary">Default</a></li>
-													<li><a href="#" class="button">Default</a></li>
-													<li><a href="#" class="button alt">Default</a></li>
-												</ul>
-											</div>
-											<div class="col-3 col-6 col-12-xsmall">
-												<ul class="actions stacked">
-													<li><a href="#" class="button primary small">Small</a></li>
-													<li><a href="#" class="button small">Small</a></li>
-													<li><a href="#" class="button alt small">Small</a></li>
-												</ul>
-											</div>
-											<div class="col-3 col-6-medium col-12-xsmall">
-												<ul class="actions stacked">
-													<li><a href="#" class="button primary fit">Default</a></li>
-													<li><a href="#" class="button fit">Default</a></li>
-													<li><a href="#" class="button alt fit">Default</a></li>
-												</ul>
-											</div>
-											<div class="col-3 col-6-medium col-12-xsmall">
-												<ul class="actions stacked">
-													<li><a href="#" class="button primary small fit">Small</a></li>
-													<li><a href="#" class="button small fit">Small</a></li>
-													<li><a href="#" class="button alt small fit">Small</a></li>
-												</ul>
-											</div>
-										</div>
-									</section>
+		function listInputs(inputs){
+			var input = inputs.value;
+				log("Input port : [ type:'" + input.type + "' id: '" + input.id + 
+						"' manufacturer: '" + input.manufacturer + "' name: '" + input.name + 
+						"' version: '" + input.version + "']");
+		}
 
-									<section>
-										<h4>Table</h4>
-										<h5>Default</h5>
-										<div class="table-wrapper">
-											<table>
-												<thead>
-													<tr>
-														<th>Name</th>
-														<th>Description</th>
-														<th>Price</th>
-													</tr>
-												</thead>
-												<tbody>
-													<tr>
-														<td>Item One</td>
-														<td>Ante turpis integer aliquet porttitor.</td>
-														<td>29.99</td>
-													</tr>
-													<tr>
-														<td>Item Two</td>
-														<td>Vis ac commodo adipiscing arcu aliquet.</td>
-														<td>19.99</td>
-													</tr>
-													<tr>
-														<td>Item Three</td>
-														<td> Morbi faucibus arcu accumsan lorem.</td>
-														<td>29.99</td>
-													</tr>
-													<tr>
-														<td>Item Four</td>
-														<td>Vitae integer tempus condimentum.</td>
-														<td>19.99</td>
-													</tr>
-													<tr>
-														<td>Item Five</td>
-														<td>Ante turpis integer aliquet porttitor.</td>
-														<td>29.99</td>
-													</tr>
-												</tbody>
-												<tfoot>
-													<tr>
-														<td colspan="2"></td>
-														<td>100.00</td>
-													</tr>
-												</tfoot>
-											</table>
-										</div>
+		function noteOn(midiNote, velocity){
+			player(midiNote, velocity);
+		}
 
-										<h5>Alternate</h5>
-										<div class="table-wrapper">
-											<table class="alt">
-												<thead>
-													<tr>
-														<th>Name</th>
-														<th>Description</th>
-														<th>Price</th>
-													</tr>
-												</thead>
-												<tbody>
-													<tr>
-														<td>Item One</td>
-														<td>Ante turpis integer aliquet porttitor.</td>
-														<td>29.99</td>
-													</tr>
-													<tr>
-														<td>Item Two</td>
-														<td>Vis ac commodo adipiscing arcu aliquet.</td>
-														<td>19.99</td>
-													</tr>
-													<tr>
-														<td>Item Three</td>
-														<td> Morbi faucibus arcu accumsan lorem.</td>
-														<td>29.99</td>
-													</tr>
-													<tr>
-														<td>Item Four</td>
-														<td>Vitae integer tempus condimentum.</td>
-														<td>19.99</td>
-													</tr>
-													<tr>
-														<td>Item Five</td>
-														<td>Ante turpis integer aliquet porttitor.</td>
-														<td>29.99</td>
-													</tr>
-												</tbody>
-												<tfoot>
-													<tr>
-														<td colspan="2"></td>
-														<td>100.00</td>
-													</tr>
-												</tfoot>
-											</table>
-										</div>
-									</section>
+		function noteOff(midiNote, velocity){
+			player(midiNote, velocity);
+		}
 
-									<section>
-										<h4>Buttons</h4>
-										<ul class="actions">
-											<li><a href="#" class="button primary">Primary</a></li>
-											<li><a href="#" class="button">Default</a></li>
-											<li><a href="#" class="button alt">Alternate</a></li>
-										</ul>
-										<ul class="actions">
-											<li><a href="#" class="button primary large">Large</a></li>
-											<li><a href="#" class="button">Default</a></li>
-											<li><a href="#" class="button alt small">Small</a></li>
-										</ul>
-										<ul class="actions fit">
-											<li><a href="#" class="button primary fit">Fit</a></li>
-											<li><a href="#" class="button fit">Fit</a></li>
-											<li><a href="#" class="button alt fit">Fit</a></li>
-										</ul>
-										<ul class="actions fit small">
-											<li><a href="#" class="button primary fit small">Fit + Small</a></li>
-											<li><a href="#" class="button fit small">Fit + Small</a></li>
-											<li><a href="#" class="button alt fit small">Fit + Small</a></li>
-										</ul>
-										<ul class="actions">
-											<li><a href="#" class="button primary icon fa-download">Icon</a></li>
-											<li><a href="#" class="button icon fa-download">Icon</a></li>
-											<li><a href="#" class="button alt icon fa-check">Icon</a></li>
-										</ul>
-										<ul class="actions">
-											<li><span class="button primary disabled">Primary</span></li>
-											<li><span class="button disabled">Default</span></li>
-											<li><span class="button alt disabled">Alternate</span></li>
-										</ul>
-									</section>
+		function player(note, velocity){
+			var sample = sampleMap['key'+note];
+			if(sample){
+				if(type == (0x80 & 0xf0) || velocity == 0){ //needs to be fixed for QuNexus, which always returns 144
+					btn[sample - 1].classList.remove('active');
+					return;
+				}
+				btn[sample - 1].classList.add('active');
+				btn[sample - 1].play(velocity);
+			}
+		}
 
-									<section>
-										<h4>Form</h4>
-										<form method="post" action="#">
-											<div class="row gtr-uniform">
-												<div class="col-6 col-12-xsmall">
-													<input type="text" name="demo-name" id="demo-name" value="" placeholder="Name" />
-												</div>
-												<div class="col-6 col-12-xsmall">
-													<input type="email" name="demo-email" id="demo-email" value="" placeholder="Email" />
-												</div>
-												<div class="col-12">
-													<select name="demo-category" id="demo-category">
-														<option value="">- Category -</option>
-														<option value="1">Manufacturing</option>
-														<option value="1">Shipping</option>
-														<option value="1">Administration</option>
-														<option value="1">Human Resources</option>
-													</select>
-												</div>
-												<div class="col-4 col-12-medium">
-													<input type="radio" id="demo-priority-low" name="demo-priority" checked>
-													<label for="demo-priority-low">Low Priority</label>
-												</div>
-												<div class="col-4 col-12-medium">
-													<input type="radio" id="demo-priority-normal" name="demo-priority">
-													<label for="demo-priority-normal">Normal Priority</label>
-												</div>
-												<div class="col-4 col-12-medium">
-													<input type="radio" id="demo-priority-high" name="demo-priority">
-													<label for="demo-priority-high">High Priority</label>
-												</div>
-												<div class="col-6 col-12-medium">
-													<input type="checkbox" id="demo-copy" name="demo-copy">
-													<label for="demo-copy">Email me a copy of this message</label>
-												</div>
-												<div class="col-6 col-12-medium">
-													<input type="checkbox" id="demo-human" name="demo-human" checked>
-													<label for="demo-human">I am a human and not a robot</label>
-												</div>
-												<div class="col-12">
-													<textarea name="demo-message" id="demo-message" placeholder="Enter your message" rows="6"></textarea>
-												</div>
-												<div class="col-12">
-													<ul class="actions">
-														<li><input type="submit" value="Send Message" /></li>
-														<li><input type="reset" value="Reset" class="alt" /></li>
-													</ul>
-												</div>
-											</div>
-										</form>
-									</section>
+		function onMIDIFailure(e){
+			log("No access to MIDI devices or your browser doesn't support WebMIDI API. Please use WebMIDIAPIShim " + e);
+		}
 
-									<section>
-										<h4>Image</h4>
-										<h5>Fit</h5>
-										<span class="image fit"><img src="images/banner.jpg" alt="" /></span>
-										<div class="box alt">
-											<div class="row gtr-50 gtr-uniform">
-												<div class="col-4"><span class="image fit"><img src="images/pic01.jpg" alt="" /></span></div>
-												<div class="col-4"><span class="image fit"><img src="images/pic02.jpg" alt="" /></span></div>
-												<div class="col-4"><span class="image fit"><img src="images/pic03.jpg" alt="" /></span></div>
-												<div class="col-4"><span class="image fit"><img src="images/pic02.jpg" alt="" /></span></div>
-												<div class="col-4"><span class="image fit"><img src="images/pic03.jpg" alt="" /></span></div>
-												<div class="col-4"><span class="image fit"><img src="images/pic01.jpg" alt="" /></span></div>
-												<div class="col-4"><span class="image fit"><img src="images/pic03.jpg" alt="" /></span></div>
-												<div class="col-4"><span class="image fit"><img src="images/pic01.jpg" alt="" /></span></div>
-												<div class="col-4"><span class="image fit"><img src="images/pic02.jpg" alt="" /></span></div>
-											</div>
-										</div>
-										<h5>Left &amp; Right</h5>
-										<p><span class="image left"><img src="images/avatar.jpg" alt="" /></span>Fringilla nisl. Donec accumsan interdum nisi, quis tincidunt felis sagittis eget. tempus euismod. Vestibulum ante ipsum primis in faucibus vestibulum. Blandit adipiscing eu felis iaculis volutpat ac adipiscing accumsan eu faucibus. Integer ac pellentesque praesent tincidunt felis sagittis eget. tempus euismod. Vestibulum ante ipsum primis in faucibus vestibulum. Blandit adipiscing eu felis iaculis volutpat ac adipiscing accumsan eu faucibus. Integer ac pellentesque praesent. Donec accumsan interdum nisi, quis tincidunt felis sagittis eget. tempus euismod. Vestibulum ante ipsum primis in faucibus vestibulum. Blandit adipiscing eu felis iaculis volutpat ac adipiscing accumsan eu faucibus. Integer ac pellentesque praesent tincidunt felis sagittis eget. tempus euismod. Vestibulum ante ipsum primis in faucibus vestibulum. Blandit adipiscing eu felis iaculis volutpat ac adipiscing accumsan eu faucibus. Integer ac pellentesque praesent.</p>
-										<p><span class="image right"><img src="images/avatar.jpg" alt="" /></span>Fringilla nisl. Donec accumsan interdum nisi, quis tincidunt felis sagittis eget. tempus euismod. Vestibulum ante ipsum primis in faucibus vestibulum. Blandit adipiscing eu felis iaculis volutpat ac adipiscing accumsan eu faucibus. Integer ac pellentesque praesent tincidunt felis sagittis eget. tempus euismod. Vestibulum ante ipsum primis in faucibus vestibulum. Blandit adipiscing eu felis iaculis volutpat ac adipiscing accumsan eu faucibus. Integer ac pellentesque praesent. Donec accumsan interdum nisi, quis tincidunt felis sagittis eget. tempus euismod. Vestibulum ante ipsum primis in faucibus vestibulum. Blandit adipiscing eu felis iaculis volutpat ac adipiscing accumsan eu faucibus. Integer ac pellentesque praesent tincidunt felis sagittis eget. tempus euismod. Vestibulum ante ipsum primis in faucibus vestibulum. Blandit adipiscing eu felis iaculis volutpat ac adipiscing accumsan eu faucibus. Integer ac pellentesque praesent.</p>
-									</section>
+		// MIDI utility functions
+		function showMIDIPorts(midiAccess){
+			var inputs = midiAccess.inputs,
+					outputs = midiAccess.outputs, 
+					html;
+			html = '<h4>MIDI Inputs:</h4><div class="info">';
+			inputs.forEach(function(port){
+				html += '<p>' + port.name + '<p>';
+				html += '<p class="small">connection: ' + port.connection + '</p>';
+				html += '<p class="small">state: ' + port.state + '</p>';
+				html += '<p class="small">manufacturer: ' + port.manufacturer + '</p>';
+				if(port.version){
+					html += '<p class="small">version: ' + port.version + '</p>';
+				}
+			});
+			deviceInfoInputs.innerHTML = html + '</div>';
 
-								</div>
-							</section>
-						-->
+			html = '<h4>MIDI Outputs:</h4><div class="info">';
+			outputs.forEach(function(port){
+				html += '<p>' + port.name + '<br>';
+				html += '<p class="small">manufacturer: ' + port.manufacturer + '</p>';
+				if(port.version){
+					html += '<p class="small">version: ' + port.version + '</p>';
+				}
+			});
+			deviceInfoOutputs.innerHTML = html + '</div>';
+		}
 
-					</div>
+		// audio functions
+		function loadAudio(object, url){
+			var request = new XMLHttpRequest();
+			request.open('GET', url, true);
+			request.responseType = 'arraybuffer';
+			request.onload = function(){
+				context.decodeAudioData(request.response, function(buffer){
+					object.buffer = buffer;
+				});
+			}
+			request.send();
+		}
 
-				<!-- Footer -->
-					<section id="footer">
-						<div class="container">
-							<ul class="copyright">
-								<li>&copy; 2018. All rights reserved.</li><li>Design: <a href="http://html5up.net">HTML5 UP</a></li>
-							</ul>
-						</div>
-					</section>
+		function addAudioProperties(object){
+			object.name = object.id;
+			object.source = object.dataset.sound;
+			loadAudio(object, object.source);
+			object.play = function(volume){
+				var s = context.createBufferSource();
+				var g = context.createGain();
+				var v;
+				s.buffer = object.buffer;
+				s.playbackRate.value = randomRange(0.5, 2);
+				if(volume){
+					v = rangeMap(volume, 1, 127, 0.2, 2);
+					s.connect(g);
+					g.gain.value = v * v;
+					g.connect(context.destination);
+				}
+				else{
+					s.connect(context.destination);	
+				}
+				
+				s.start();
+				object.s = s;
+			}
+		}
 
-			</div>
+		// utility functions
+		function randomRange(min, max){
+			return Math.random() * (max + min) + min;
+		}
 
-		<!-- Scripts -->
-			<script src="assets/js/jquery.min.js"></script>
-			<script src="assets/js/jquery.scrollex.min.js"></script>
-			<script src="assets/js/jquery.scrolly.min.js"></script>
-			<script src="assets/js/browser.min.js"></script>
-			<script src="assets/js/breakpoints.min.js"></script>
-			<script src="assets/js/util.js"></script>
-			<script src="assets/js/main.js"></script>
+		function rangeMap(x, a1, a2, b1, b2){
+			return ((x - a1)/(a2-a1)) * (b2 - b1) + b1;
+		}
 
-	</body>
+		function frequencyFromNoteNumber( note ) {
+			return 440 * Math.pow(2,(note-69)/12);
+		}
+
+		function logger(container, label, data){
+			messages = label + " [channel: " + (data[0] & 0xf) + ", cmd: " + (data[0] >> 4) + ", type: " + (data[0] & 0xf0) + " , note: " + data[1] + " , velocity: " + data[2] + "]";
+			container.textContent = messages;
+		}
+
+	})();
+	</script>
+</body>
 </html>
